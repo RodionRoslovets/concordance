@@ -1,0 +1,1869 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Коэффициент конкордации — обработка связных рангов</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --page-bg: #12081f;
+      --page-bg-2: #1a0e2c;
+      --card-bg: rgba(31, 18, 54, 0.92);
+      --card-bg-2: rgba(43, 23, 73, 0.88);
+      --line: rgba(181, 144, 255, 0.25);
+      --line-strong: rgba(197, 165, 255, 0.45);
+      --text-main: #f5efff;
+      --text-soft: #cdbcf1;
+      --text-muted: #aa96d4;
+      --accent: #c297ff;
+      --accent-2: #9d6cff;
+      --accent-3: #ebdcff;
+      --success-bg: rgba(76, 186, 131, 0.15);
+      --success-line: rgba(76, 186, 131, 0.38);
+      --warning-bg: rgba(236, 185, 84, 0.14);
+      --warning-line: rgba(236, 185, 84, 0.42);
+      --danger-bg: rgba(235, 113, 137, 0.16);
+      --danger-line: rgba(235, 113, 137, 0.45);
+      --input-bg: rgba(17, 10, 31, 0.98);
+      --button-main: linear-gradient(135deg, #8b5cf6 0%, #c084fc 100%);
+      --button-secondary: rgba(157, 108, 255, 0.14);
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+      --tie-bg: rgba(194, 151, 255, 0.18);
+      --tie-line: rgba(194, 151, 255, 0.45);
+      --converted-bg: rgba(157, 108, 255, 0.12);
+      --converted-line: rgba(157, 108, 255, 0.3);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+      --font-main: Inter, Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top left, rgba(242, 231, 255, 0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(157, 108, 255, 0.13), transparent 24%),
+        linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg-2) 100%);
+      color: var(--text-main);
+      font-family: var(--font-main);
+    }
+
+    body {
+      padding: 24px;
+      filter: hue-rotate(86deg) invert(1);
+    }
+
+    .app {
+      width: 100%;
+      max-width: 1680px;
+      margin: 0 auto;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, rgba(39, 23, 67, 0.95) 0%, rgba(58, 28, 102, 0.9) 100%);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      padding: 28px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -120px -120px auto;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(235, 220, 255, 0.16) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero__title {
+      margin: 0 0 10px;
+      font-size: clamp(34px, 4vw, 52px);
+      line-height: 1.06;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .hero__text {
+      margin: 0;
+      max-width: 1060px;
+      color: var(--text-soft);
+      font-size: 18px;
+      line-height: 1.72;
+    }
+
+    .layout {
+      display: grid;
+      /* grid-template-columns: 360px minmax(0, 1fr); */
+      grid-template-columns: minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .card {
+      background: linear-gradient(180deg, var(--card-bg) 0%, var(--card-bg-2) 100%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(18px);
+    }
+
+    .card__section {
+      padding: 22px;
+      border-top: 1px solid rgba(181, 144, 255, 0.16);
+    }
+
+    .card__section:first-child {
+      border-top: none;
+    }
+
+    .section-title {
+      margin: 0 0 14px;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .section-text {
+      margin: 0 0 14px;
+      color: var(--text-soft);
+      line-height: 1.65;
+      font-size: 15px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .field-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field-label {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .field-input,
+    .field-select {
+      width: 100%;
+      min-height: 48px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(181, 144, 255, 0.3);
+      background: var(--input-bg);
+      color: var(--text-main);
+      padding: 0 16px;
+      font-size: 16px;
+      outline: none;
+      transition: 0.2s border-color, 0.2s box-shadow, 0.2s transform;
+    }
+
+    .field-input:focus,
+    .field-select:focus,
+    .matrix-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(194, 151, 255, 0.12);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .button {
+      min-height: 48px;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 0 18px;
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.16s ease, opacity 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .button--primary {
+      background: var(--button-main);
+      box-shadow: 0 8px 18px rgba(157, 108, 255, 0.3);
+    }
+
+    .button--secondary {
+      background: var(--button-secondary);
+      border: 1px solid rgba(181, 144, 255, 0.28);
+      color: var(--text-main);
+    }
+
+    .button--full {
+      width: 100%;
+    }
+
+    .name-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .name-row {
+      display: grid;
+      grid-template-columns: 58px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .name-badge {
+      min-height: 48px;
+      border-radius: 999px;
+      background: rgba(194, 151, 255, 0.14);
+      border: 1px solid rgba(194, 151, 255, 0.25);
+      color: var(--accent-3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .workspace-card {
+      padding: 22px;
+    }
+
+    .workspace-title {
+      margin: 0 0 10px;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .workspace-text {
+      margin: 0 0 14px;
+      color: var(--text-soft);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .legend__item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-soft);
+    }
+
+    .legend__chip {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+    }
+
+    .legend__chip--tie {
+      background: var(--tie-bg);
+      border-color: var(--tie-line);
+    }
+
+    .legend__chip--converted {
+      background: var(--converted-bg);
+      border-color: var(--converted-line);
+    }
+
+    .matrix-shell {
+      border: 1px solid rgba(181, 144, 255, 0.25);
+      border-radius: 26px;
+      overflow: hidden;
+      background: rgba(22, 11, 38, 0.8);
+    }
+
+    .matrix-scroll {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .matrix-table {
+      width: 100%;
+      min-width: 880px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .matrix-table th,
+    .matrix-table td {
+      border: 1px solid rgba(181, 144, 255, 0.18);
+      padding: 16px 14px;
+      text-align: center;
+      vertical-align: middle;
+      word-break: break-word;
+    }
+
+    .matrix-table thead th {
+      background: rgba(34, 17, 58, 0.95);
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .matrix-table thead th:first-child,
+    .matrix-table tbody th,
+    .matrix-table tfoot th {
+      width: 250px;
+      min-width: 250px;
+      text-align: left;
+    }
+
+    .matrix-table thead th:first-child {
+      text-align: center;
+    }
+
+    .matrix-table tbody th,
+    .matrix-table tfoot th {
+      background: rgba(28, 14, 49, 0.9);
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .matrix-table tfoot td,
+    .matrix-table tfoot th {
+      background: rgba(22, 11, 38, 0.96);
+    }
+
+    .matrix-input {
+      width: 100%;
+      min-width: 0;
+      min-height: 50px;
+      border-radius: 18px;
+      border: 1px solid rgba(181, 144, 255, 0.26);
+      background: rgba(14, 8, 25, 0.98);
+      color: var(--text-main);
+      text-align: center;
+      font-size: 17px;
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .cell--tie {
+      background: var(--tie-bg);
+      box-shadow: inset 0 0 0 1px var(--tie-line);
+    }
+
+    .cell--converted {
+      background: var(--converted-bg);
+      box-shadow: inset 0 0 0 1px var(--converted-line);
+    }
+
+    .results {
+      padding: 22px;
+    }
+
+    .results__title {
+      margin: 0 0 14px;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .results-empty {
+      color: var(--text-soft);
+      line-height: 1.7;
+    }
+
+    .message-box {
+      border-radius: 20px;
+      padding: 18px 20px;
+      border: 1px solid transparent;
+      line-height: 1.65;
+      margin-bottom: 16px;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .message-box--error {
+      background: var(--danger-bg);
+      border-color: var(--danger-line);
+      color: #ffd6df;
+    }
+
+    .message-box--success {
+      background: var(--success-bg);
+      border-color: var(--success-line);
+      color: #e2ffef;
+    }
+
+    .message-box--warning {
+      background: var(--warning-bg);
+      border-color: var(--warning-line);
+      color: #ffeec8;
+    }
+
+    .verdict {
+      background: linear-gradient(135deg, rgba(86, 49, 143, 0.92) 0%, rgba(120, 78, 206, 0.92) 50%, rgba(168, 117, 255, 0.82) 100%);
+      border: 1px solid rgba(235, 220, 255, 0.25);
+      border-radius: 24px;
+      padding: 24px;
+      margin-bottom: 18px;
+      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.28);
+    }
+
+    .verdict__label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.13);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .verdict__title {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 3vw, 40px);
+      font-weight: 800;
+      line-height: 1.06;
+    }
+
+    .verdict__text {
+      margin: 0;
+      max-width: 980px;
+      font-size: 17px;
+      line-height: 1.7;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .summary-card {
+      border: 1px solid rgba(181, 144, 255, 0.24);
+      border-radius: 18px;
+      background: rgba(22, 11, 38, 0.72);
+      padding: 16px;
+    }
+
+    .summary-card__title {
+      margin: 0 0 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .summary-card__value {
+      font-size: 34px;
+      line-height: 1.1;
+      font-weight: 800;
+    }
+
+    .result-block {
+      margin-top: 16px;
+      border: 1px solid rgba(181, 144, 255, 0.22);
+      border-radius: 24px;
+      background: rgba(31, 18, 54, 0.78);
+      overflow: hidden;
+    }
+
+    .result-block__header {
+      padding: 18px 20px;
+      border-bottom: 1px solid rgba(181, 144, 255, 0.18);
+      background: rgba(41, 20, 70, 0.8);
+    }
+
+    .result-block__title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .result-block__content {
+      padding: 18px 20px;
+    }
+
+    .note {
+      margin-top: 14px;
+      border-radius: 18px;
+      padding: 14px 16px;
+      background: rgba(20, 11, 36, 0.88);
+      border: 1px solid rgba(181, 144, 255, 0.18);
+      color: var(--text-soft);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .plain-list {
+      margin: 0;
+      padding-left: 22px;
+      line-height: 1.75;
+      color: var(--text-main);
+    }
+
+    .plain-list li + li {
+      margin-top: 6px;
+    }
+
+    .rating-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .rating-item {
+      display: grid;
+      grid-template-columns: 56px minmax(0, 1fr) auto auto;
+      gap: 14px;
+      align-items: center;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(20, 11, 36, 0.88);
+      border: 1px solid rgba(181, 144, 255, 0.18);
+    }
+
+    .rating-item__index {
+      width: 56px;
+      height: 56px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(194, 151, 255, 0.14);
+      color: var(--accent-3);
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .rating-item__name {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .rating-item__meta {
+      color: var(--text-soft);
+      font-size: 15px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1360px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 900px) {
+      body {
+        padding: 14px;
+      }
+
+      .hero,
+      .workspace-card,
+      .results,
+      .card__section {
+        padding: 18px;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .field-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .rating-item {
+        grid-template-columns: 56px 1fr;
+      }
+
+      .rating-item__meta {
+        white-space: normal;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <h1 class="hero__title">Коэффициент конкордации со связными рангами</h1>
+      <!-- <p class="hero__text">
+        Алгоритм построен по методике из файла: матрица «эксперт–объект», обработка связных рангов,
+        расчёт поправочных коэффициентов <strong>T<sub>i</sub></strong>, сумм рангов <strong>S<sub>j</sub></strong>,
+        средней суммы <strong>Sср</strong>, коэффициента конкордации <strong>W</strong>, проверки по <strong>χ²</strong>
+        и последовательного исключения эксперта-диссидента по величине <strong>ΣΔR<sub>i,j</sub></strong>. fileciteturn5file0
+      </p> -->
+    </section>
+
+    <div class="layout">
+      <aside class="card">
+        <section class="card__section">
+          <h2 class="section-title">1. Параметры</h2>
+          <!-- <p class="section-text">
+            Можно вводить как уже готовые ранги, так и произвольные значения. Система сама приведёт каждую строку
+            к рангам по порядку значений, а факт преобразования покажет в результатах. fileciteturn5file0
+          </p> -->
+
+          <div class="field-grid">
+            <div class="field-wrapper">
+              <label class="field-label" for="expertCountInput">Количество экспертов p</label>
+              <input class="field-input" id="expertCountInput" type="number" min="2" max="30" value="5" />
+            </div>
+            <div class="field-wrapper">
+              <label class="field-label" for="objectCountInput">Количество объектов m</label>
+              <input class="field-input" id="objectCountInput" type="number" min="2" max="30" value="5" />
+            </div>
+          </div>
+
+          <div class="field-wrapper">
+            <label class="field-label" for="alphaSelect">Уровень значимости α</label>
+            <select class="field-select" id="alphaSelect">
+              <option value="0.1">0.10</option>
+              <option value="0.05" selected>0.05</option>
+              <option value="0.01">0.01</option>
+            </select>
+          </div>
+
+          <div class="button-row">
+            <button class="button button--primary" id="buildFormButton" type="button">Построить форму</button>
+            <button class="button button--secondary" id="fillDemoButton" type="button">Заполнить демо</button>
+            <button class="button button--secondary" id="clearButton" type="button">Очистить</button>
+          </div>
+        </section>
+
+        <section class="card__section">
+          <h2 class="section-title">2. Имена экспертов</h2>
+          <div class="name-list" id="expertNameList"></div>
+        </section>
+
+        <section class="card__section">
+          <h2 class="section-title">3. Названия объектов</h2>
+          <div class="name-list" id="objectNameList"></div>
+        </section>
+
+        <section class="card__section">
+          <button class="button button--primary button--full" id="calculateButton" type="button">Рассчитать</button>
+          <div class="button-row">
+            <button class="button button--secondary button--full" id="exportButton" type="button" disabled>Экспорт в Excel</button>
+          </div>
+          <!-- <p class="section-text section-text--last">
+            При обработке связных рангов система присваивает одинаковым значениям средние ранги и считает T<sub>i</sub> по формуле
+            <strong>T<sub>i</sub> = Σ n<sub>il</sub>(n<sub>il</sub><sup>2</sup> − 1)</strong>. fileciteturn5file0
+          </p> -->
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="card workspace-card">
+          <h2 class="workspace-title">Матрица «эксперт — объект»</h2>
+          <!-- <p class="workspace-text">
+            По методике исходная таблица имеет размер p×m. Ниже вводятся оценки экспертов, после чего система строит
+            обработанную матрицу рангов и все расчётные таблицы. fileciteturn5file0
+          </p> -->
+
+          <div class="matrix-shell">
+            <div class="matrix-scroll" id="inputMatrixContainer"></div>
+          </div>
+
+          <div class="legend">
+            <div class="legend__item"><span class="legend__chip legend__chip--tie"></span> связные ранги</div>
+            <div class="legend__item"><span class="legend__chip legend__chip--converted"></span> преобразование произвольных значений в ранги</div>
+          </div>
+        </section>
+
+        <section class="card results">
+          <h2 class="results__title">Результаты расчёта</h2>
+          <div id="resultsContainer">
+            <!-- <div class="results-empty">
+              Здесь появятся исходная таблица, обработанная ранговая матрица, расчёт W, проверка согласованности,
+              поиск диссидента, все итерации и экспорт в Excel.
+            </div> -->
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const chiSquareCriticalValues = {
+      "0.1": {
+        1: 2.706, 2: 4.605, 3: 6.251, 4: 7.779, 5: 9.236, 6: 10.645, 7: 12.017, 8: 13.362, 9: 14.684, 10: 15.987,
+        11: 17.275, 12: 18.549, 13: 19.812, 14: 21.064, 15: 22.307, 16: 23.542, 17: 24.769, 18: 25.989, 19: 27.204,
+        20: 28.412, 21: 29.615, 22: 30.813, 23: 32.007, 24: 33.196, 25: 34.382, 26: 35.563, 27: 36.741, 28: 37.916,
+        29: 39.087, 30: 40.256, 31: 41.422, 32: 42.585, 33: 43.745, 34: 44.903, 35: 46.059, 36: 47.212, 37: 48.363,
+        38: 49.513, 39: 50.66, 40: 51.805
+      },
+      "0.05": {
+        1: 3.841, 2: 5.991, 3: 7.815, 4: 9.488, 5: 11.07, 6: 12.592, 7: 14.067, 8: 15.507, 9: 16.919, 10: 18.307,
+        11: 19.675, 12: 21.026, 13: 22.362, 14: 23.685, 15: 24.996, 16: 26.296, 17: 27.587, 18: 28.869, 19: 30.144,
+        20: 31.41, 21: 32.671, 22: 33.924, 23: 35.172, 24: 36.415, 25: 37.652, 26: 38.885, 27: 40.113, 28: 41.337,
+        29: 42.557, 30: 43.773, 31: 44.985, 32: 46.194, 33: 47.4, 34: 48.602, 35: 49.802, 36: 50.998, 37: 52.192,
+        38: 53.384, 39: 54.572, 40: 55.758
+      },
+      "0.01": {
+        1: 6.635, 2: 9.21, 3: 11.345, 4: 13.277, 5: 15.086, 6: 16.812, 7: 18.475, 8: 20.09, 9: 21.666, 10: 23.209,
+        11: 24.725, 12: 26.217, 13: 27.688, 14: 29.141, 15: 30.578, 16: 32, 17: 33.409, 18: 34.805, 19: 36.191,
+        20: 37.566, 21: 38.932, 22: 40.289, 23: 41.638, 24: 42.98, 25: 44.314, 26: 45.642, 27: 46.963, 28: 48.278,
+        29: 49.588, 30: 50.892, 31: 52.191, 32: 53.486, 33: 54.776, 34: 56.061, 35: 57.342, 36: 58.619, 37: 59.893,
+        38: 61.162, 39: 62.428, 40: 63.691
+      }
+    };
+
+    const expertCountInput = document.getElementById("expertCountInput");
+    const objectCountInput = document.getElementById("objectCountInput");
+    const alphaSelect = document.getElementById("alphaSelect");
+    const buildFormButton = document.getElementById("buildFormButton");
+    const fillDemoButton = document.getElementById("fillDemoButton");
+    const clearButton = document.getElementById("clearButton");
+    const calculateButton = document.getElementById("calculateButton");
+    const exportButton = document.getElementById("exportButton");
+    const expertNameList = document.getElementById("expertNameList");
+    const objectNameList = document.getElementById("objectNameList");
+    const inputMatrixContainer = document.getElementById("inputMatrixContainer");
+    const resultsContainer = document.getElementById("resultsContainer");
+
+    let latestExportPayload = null;
+
+    const getSafeInteger = (value, minValue, maxValue, fallbackValue) => {
+      const parsedValue = Number(value);
+
+      if (!Number.isFinite(parsedValue)) {
+        return fallbackValue;
+      }
+
+      const roundedValue = Math.floor(parsedValue);
+
+      if (roundedValue < minValue) {
+        return minValue;
+      }
+
+      if (roundedValue > maxValue) {
+        return maxValue;
+      }
+
+      return roundedValue;
+    };
+
+    const formatNumber = (value, digits = 4) => {
+      if (!Number.isFinite(value)) {
+        return "—";
+      }
+
+      const roundedValue = Number(value.toFixed(digits));
+      return String(roundedValue);
+    };
+
+    const escapeHtml = (text) => {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    };
+
+    const sumValues = (values) => values.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
+
+    const buildNameInputs = () => {
+      const expertCount = getSafeInteger(expertCountInput.value, 2, 30, 5);
+      const objectCount = getSafeInteger(objectCountInput.value, 2, 30, 5);
+
+      expertCountInput.value = expertCount;
+      objectCountInput.value = objectCount;
+
+      expertNameList.innerHTML = "";
+      objectNameList.innerHTML = "";
+
+      for (let expertIndex = 0; expertIndex < expertCount; expertIndex += 1) {
+        const rowElement = document.createElement("div");
+        rowElement.className = "name-row";
+        rowElement.innerHTML = `
+          <div class="name-badge">${expertIndex + 1}</div>
+          <input class="field-input" type="text" data-expert-name-index="${expertIndex}" value="Эксперт ${expertIndex + 1}" />
+        `;
+        expertNameList.appendChild(rowElement);
+      }
+
+      for (let objectIndex = 0; objectIndex < objectCount; objectIndex += 1) {
+        const rowElement = document.createElement("div");
+        rowElement.className = "name-row";
+        rowElement.innerHTML = `
+          <div class="name-badge">${objectIndex + 1}</div>
+          <input class="field-input" type="text" data-object-name-index="${objectIndex}" value="Объект ${objectIndex + 1}" />
+        `;
+        objectNameList.appendChild(rowElement);
+      }
+    };
+
+    const getExpertNames = () => {
+      return Array.from(document.querySelectorAll("[data-expert-name-index]")).map((inputElement, expertIndex) => {
+        const trimmedValue = inputElement.value.trim();
+        return trimmedValue || `Эксперт ${expertIndex + 1}`;
+      });
+    };
+
+    const getObjectNames = () => {
+      return Array.from(document.querySelectorAll("[data-object-name-index]")).map((inputElement, objectIndex) => {
+        const trimmedValue = inputElement.value.trim();
+        return trimmedValue || `Объект ${objectIndex + 1}`;
+      });
+    };
+
+    const buildInputMatrix = () => {
+      const expertNames = getExpertNames();
+      const objectNames = getObjectNames();
+
+      let tableHeadHtml = "<tr><th>Эксперт / Объект</th>";
+      objectNames.forEach((objectName) => {
+        tableHeadHtml += `<th>${escapeHtml(objectName)}</th>`;
+      });
+      tableHeadHtml += "</tr>";
+
+      let tableBodyHtml = "";
+      expertNames.forEach((expertName, expertIndex) => {
+        tableBodyHtml += `<tr><th>${escapeHtml(expertName)}</th>`;
+        objectNames.forEach((_, objectIndex) => {
+          tableBodyHtml += `
+            <td>
+              <input
+                class="matrix-input"
+                type="number"
+                step="any"
+                data-matrix-cell="${expertIndex}:${objectIndex}"
+                placeholder="0"
+              />
+            </td>
+          `;
+        });
+        tableBodyHtml += "</tr>";
+      });
+
+      inputMatrixContainer.innerHTML = `
+        <table class="matrix-table">
+          <thead>${tableHeadHtml}</thead>
+          <tbody>${tableBodyHtml}</tbody>
+        </table>
+      `;
+    };
+
+    const resetResults = () => {
+      latestExportPayload = null;
+      exportButton.disabled = true;
+      // resultsContainer.innerHTML = `
+      //   <div class="results-empty">
+      //     Здесь появятся исходная таблица, обработанная ранговая матрица, расчёт W, проверка согласованности,
+      //     поиск диссидента, все итерации и экспорт в Excel.
+      //   </div>
+      // `;
+      resultsContainer.innerHTML = `
+       
+      `;
+    };
+
+    const buildInterface = () => {
+      buildNameInputs();
+      buildInputMatrix();
+      resetResults();
+    };
+
+    const clearInputs = () => {
+      document.querySelectorAll("[data-matrix-cell]").forEach((inputElement) => {
+        inputElement.value = "";
+      });
+      resetResults();
+    };
+
+    const readRawMatrix = () => {
+      const expertCount = getSafeInteger(expertCountInput.value, 2, 30, 5);
+      const objectCount = getSafeInteger(objectCountInput.value, 2, 30, 5);
+      const rawMatrix = [];
+
+      for (let expertIndex = 0; expertIndex < expertCount; expertIndex += 1) {
+        const rowValues = [];
+
+        for (let objectIndex = 0; objectIndex < objectCount; objectIndex += 1) {
+          const inputElement = document.querySelector(`[data-matrix-cell="${expertIndex}:${objectIndex}"]`);
+
+          if (!inputElement) {
+            throw new Error("Не удалось прочитать матрицу. Сначала заново построй форму.");
+          }
+
+          const numericValue = Number(inputElement.value);
+
+          if (!Number.isFinite(numericValue)) {
+            throw new Error(`Заполни все ячейки матрицы. Ошибка в строке ${expertIndex + 1}, столбце ${objectIndex + 1}.`);
+          }
+
+          rowValues.push(numericValue);
+        }
+
+        rawMatrix.push(rowValues);
+      }
+
+      return rawMatrix;
+    };
+
+    const isStrictRankRow = (rowValues) => {
+      const objectCount = rowValues.length;
+      const integerValues = rowValues.every((value) => Number.isInteger(value));
+      const inRange = rowValues.every((value) => value >= 1 && value <= objectCount);
+      const uniqueCount = new Set(rowValues).size === objectCount;
+      const expectedSum = (objectCount * (objectCount + 1)) / 2;
+      return integerValues && inRange && uniqueCount && sumValues(rowValues) === expectedSum;
+    };
+
+    const isRankLikeRow = (rowValues) => {
+      const objectCount = rowValues.length;
+      return rowValues.every((value) => Number.isInteger(value) && value >= 1 && value <= objectCount);
+    };
+
+    const rankValuesWithTies = (values) => {
+      const sortedItems = values
+        .map((value, index) => ({ value, index }))
+        .sort((leftItem, rightItem) => {
+          if (leftItem.value === rightItem.value) {
+            return leftItem.index - rightItem.index;
+          }
+          return leftItem.value - rightItem.value;
+        });
+
+      const ranks = new Array(values.length).fill(0);
+      const tieGroups = [];
+      let tieCoefficient = 0;
+      let groupStartIndex = 0;
+
+      while (groupStartIndex < sortedItems.length) {
+        let groupEndIndex = groupStartIndex;
+
+        while (
+          groupEndIndex + 1 < sortedItems.length &&
+          sortedItems[groupEndIndex + 1].value === sortedItems[groupStartIndex].value
+        ) {
+          groupEndIndex += 1;
+        }
+
+        const groupSize = groupEndIndex - groupStartIndex + 1;
+        const startRank = groupStartIndex + 1;
+        const endRank = groupEndIndex + 1;
+        const averageRank = (startRank + endRank) / 2;
+
+        for (let currentIndex = groupStartIndex; currentIndex <= groupEndIndex; currentIndex += 1) {
+          ranks[sortedItems[currentIndex].index] = averageRank;
+        }
+
+        if (groupSize > 1) {
+          const objectIndexes = sortedItems
+            .slice(groupStartIndex, groupEndIndex + 1)
+            .map((item) => item.index);
+
+          tieGroups.push({
+            value: sortedItems[groupStartIndex].value,
+            objectIndexes,
+            groupSize,
+            startRank,
+            endRank,
+            averageRank
+          });
+
+          tieCoefficient += groupSize * ((groupSize ** 2) - 1);
+        }
+
+        groupStartIndex = groupEndIndex + 1;
+      }
+
+      return {
+        ranks,
+        tieGroups,
+        tieCoefficient
+      };
+    };
+
+    const processExpertRows = (rawMatrix, expertNames) => {
+      return rawMatrix.map((rowValues, expertIndex) => {
+        const rankingResult = rankValuesWithTies(rowValues);
+        const strictRanks = isStrictRankRow(rowValues);
+        const rankLike = isRankLikeRow(rowValues);
+
+        // let inputModeLabel = "Произвольные значения → ранги";
+        let inputModeLabel = "";
+
+        if (strictRanks) {
+          // inputModeLabel = "Готовые ранги";
+          inputModeLabel = "";
+        } else if (rankLike) {
+          // inputModeLabel = "Связные ранги → средние ранги";
+          inputModeLabel = "";
+        }
+
+        return {
+          expertName: expertNames[expertIndex],
+          rawValues: [...rowValues],
+          normalizedRanks: rankingResult.ranks,
+          tieGroups: rankingResult.tieGroups,
+          tieCoefficient: rankingResult.tieCoefficient,
+          inputModeLabel,
+          strictRanks,
+          rankLike,
+          transformed: !strictRanks,
+          tieObjectIndexes: rankingResult.tieGroups.flatMap((group) => group.objectIndexes)
+        };
+      });
+    };
+
+    const calculateState = (expertRows, alphaValue) => {
+      const expertCount = expertRows.length;
+      const objectCount = expertRows[0].normalizedRanks.length;
+      const columnSums = new Array(objectCount).fill(0);
+
+      expertRows.forEach((expertRow) => {
+        expertRow.normalizedRanks.forEach((rankValue, objectIndex) => {
+          columnSums[objectIndex] += rankValue;
+        });
+      });
+
+      const averageSum = (expertCount * (objectCount + 1)) / 2;
+      const deviations = columnSums.map((sumValue) => sumValue - averageSum);
+      const squaredDeviations = deviations.map((deviationValue) => deviationValue ** 2);
+      const squaredDeviationSum = sumValues(squaredDeviations);
+      const totalTieCoefficient = sumValues(expertRows.map((expertRow) => expertRow.tieCoefficient));
+      const denominator = (expertCount ** 2) * objectCount * ((objectCount ** 2) - 1) - expertCount * totalTieCoefficient;
+      const wValue = denominator === 0 ? 0 : (12 * squaredDeviationSum) / denominator;
+      const chiCalculated = expertCount * (objectCount - 1) * wValue;
+      const degreesOfFreedom = objectCount - 1;
+      const chiCritical = chiSquareCriticalValues[alphaValue]?.[degreesOfFreedom] ?? null;
+      const isConsistent = chiCritical !== null ? chiCalculated > chiCritical : false;
+
+      const rankingResult = rankValuesWithTies(columnSums);
+      const rSj = rankingResult.ranks;
+
+      const deltaMatrix = expertRows.map((expertRow) => {
+        return expertRow.normalizedRanks.map((rankValue, objectIndex) => {
+          return Math.abs(rankValue - rSj[objectIndex]);
+        });
+      });
+
+      const deltaSums = deltaMatrix.map((rowValues) => sumValues(rowValues));
+
+      let dissidentIndex = null;
+      let dissidentName = null;
+
+      if (!isConsistent && expertCount > 2) {
+        let maxValue = deltaSums[0];
+        dissidentIndex = 0;
+
+        for (let currentIndex = 1; currentIndex < deltaSums.length; currentIndex += 1) {
+          if (deltaSums[currentIndex] > maxValue) {
+            maxValue = deltaSums[currentIndex];
+            dissidentIndex = currentIndex;
+          }
+        }
+
+        dissidentName = expertRows[dissidentIndex].expertName;
+      }
+
+      return {
+        expertRows,
+        expertCount,
+        objectCount,
+        columnSums,
+        averageSum,
+        deviations,
+        squaredDeviations,
+        squaredDeviationSum,
+        totalTieCoefficient,
+        denominator,
+        wValue,
+        chiCalculated,
+        chiCritical,
+        degreesOfFreedom,
+        isConsistent,
+        rSj,
+        deltaMatrix,
+        deltaSums,
+        dissidentIndex,
+        dissidentName
+      };
+    };
+
+    const buildAllStates = (processedExperts, alphaValue) => {
+      const states = [];
+      let currentExperts = processedExperts.map((expertRow) => ({ ...expertRow }));
+      let removedBeforeNextIteration = null;
+      let iterationNumber = 0;
+      const safetyLimit = 100;
+
+      while (currentExperts.length >= 2 && iterationNumber < safetyLimit) {
+        const state = calculateState(currentExperts, alphaValue);
+        state.iterationNumber = iterationNumber;
+        state.removedBeforeThisState = removedBeforeNextIteration;
+        states.push(state);
+
+        if (state.isConsistent || currentExperts.length <= 2 || state.dissidentIndex === null) {
+          break;
+        }
+
+        removedBeforeNextIteration = state.dissidentName;
+        currentExperts = currentExperts.filter((_, expertIndex) => expertIndex !== state.dissidentIndex);
+        iterationNumber += 1;
+      }
+
+      return states;
+    };
+
+    const getFinalVerdict = (finalState, statesCount) => {
+      if (finalState.isConsistent) {
+        return {
+          code: "СОГЛАСОВАНО",
+          cssClass: "message-box message-box--success",
+          title: "Согласованность подтверждена",
+          label: "Итог расчёта",
+          text: "Проверка χ² выполнена успешно. Мнения комиссии согласованы, итоговое упорядочение объектов можно принимать в работу."
+        };
+      }
+
+      if (statesCount > 1) {
+        return {
+          code: "НЕ СОГЛАСОВАНО",
+          cssClass: "message-box message-box--warning",
+          title: "Согласованность не достигнута",
+          label: "Итог расчёта",
+          text: "Согласованность не достигнута даже после последовательного исключения экспертов-диссидентов."
+        };
+      }
+
+      return {
+        code: "НЕ СОГЛАСОВАНО",
+        cssClass: "message-box message-box--warning",
+        title: "Согласованность не подтверждена",
+        label: "Итог расчёта",
+        text: "На полном составе комиссии согласованность мнений не подтверждена."
+      };
+    };
+
+    const getObjectOrder = (finalState, objectNames) => {
+      return objectNames
+        .map((objectName, objectIndex) => ({
+          objectName,
+          objectIndex,
+          sumValue: finalState.columnSums[objectIndex],
+          rankValue: finalState.rSj[objectIndex]
+        }))
+        .sort((leftItem, rightItem) => {
+          if (leftItem.sumValue === rightItem.sumValue) {
+            return leftItem.objectIndex - rightItem.objectIndex;
+          }
+          return leftItem.sumValue - rightItem.sumValue;
+        });
+    };
+
+    const getCellClassName = (expertRow, objectIndex, processedTable) => {
+      const hasTie = expertRow.tieObjectIndexes.includes(objectIndex);
+      const hasConversion = expertRow.transformed && !processedTable;
+      const classNames = [];
+
+      if (hasTie) {
+        classNames.push("cell--tie");
+      }
+
+      if (hasConversion) {
+        classNames.push("cell--converted");
+      }
+
+      return classNames.join(" ");
+    };
+
+    const renderMatrixTable = ({
+      title,
+      objectNames,
+      rowObjects,
+      rowHeaderLabel,
+      valueGetter,
+      footerRows = [],
+      showTi = false,
+      noteHtml = "",
+      processedTable = false,
+      showRowMode = false
+    }) => {
+      let tableHeadHtml = `<tr><th>${escapeHtml(rowHeaderLabel)}</th>`;
+
+      objectNames.forEach((objectName) => {
+        tableHeadHtml += `<th>${escapeHtml(objectName)}</th>`;
+      });
+
+      if (showTi) {
+        tableHeadHtml += "<th>T<sub>i</sub></th>";
+      }
+
+      tableHeadHtml += "</tr>";
+
+      let tableBodyHtml = "";
+
+      rowObjects.forEach((rowObject) => {
+        const rowTitle = showRowMode
+          ? `${rowObject.expertName}<br><span style="font-size:13px;color:var(--text-muted);font-weight:600;">${escapeHtml(rowObject.inputModeLabel)}</span>`
+          : rowObject.expertName;
+
+        tableBodyHtml += `<tr><th>${rowTitle}</th>`;
+
+        objectNames.forEach((_, objectIndex) => {
+          const cellClassName = getCellClassName(rowObject, objectIndex, processedTable);
+          const cellValue = valueGetter(rowObject, objectIndex);
+          tableBodyHtml += `<td class="${cellClassName}">${escapeHtml(formatNumber(cellValue, 4))}</td>`;
+        });
+
+        if (showTi) {
+          tableBodyHtml += `<td>${escapeHtml(formatNumber(rowObject.tieCoefficient, 4))}</td>`;
+        }
+
+        tableBodyHtml += "</tr>";
+      });
+
+      let tableFootHtml = "";
+      footerRows.forEach((footerRow) => {
+        tableFootHtml += `<tr><th>${footerRow.title}</th>`;
+        footerRow.values.forEach((value) => {
+          tableFootHtml += `<td>${escapeHtml(value)}</td>`;
+        });
+        if (showTi) {
+          tableFootHtml += `<td>${escapeHtml(footerRow.lastValue ?? "—")}</td>`;
+        }
+        tableFootHtml += "</tr>";
+      });
+
+      return `
+        <div class="result-block">
+          <div class="result-block__header">
+            <h3 class="result-block__title">${escapeHtml(title)}</h3>
+          </div>
+          <div class="result-block__content">
+            <div class="matrix-shell">
+              <div class="matrix-scroll">
+                <table class="matrix-table">
+                  <thead>${tableHeadHtml}</thead>
+                  <tbody>${tableBodyHtml}</tbody>
+                  ${footerRows.length > 0 ? `<tfoot>${tableFootHtml}</tfoot>` : ""}
+                </table>
+              </div>
+            </div>
+            ${noteHtml}
+          </div>
+        </div>
+      `;
+    };
+
+    const renderSummaryCards = (state, alphaValue) => {
+      return `
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-card__title">Коэффициент W</div>
+            <div class="summary-card__value">${escapeHtml(formatNumber(state.wValue, 4))}</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card__title">χ² расчётное</div>
+            <div class="summary-card__value">${escapeHtml(formatNumber(state.chiCalculated, 4))}</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card__title">χ² табличное</div>
+            <div class="summary-card__value">${state.chiCritical === null ? "нет данных" : escapeHtml(formatNumber(state.chiCritical, 4))}</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card__title">Уровень значимости α</div>
+            <div class="summary-card__value">${escapeHtml(alphaValue)}</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card__title">Средняя сумма Sср</div>
+            <div class="summary-card__value">${escapeHtml(formatNumber(state.averageSum, 4))}</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card__title">Σ(Sj − Sср)²</div>
+            <div class="summary-card__value">${escapeHtml(formatNumber(state.squaredDeviationSum, 4))}</div>
+          </div>
+        </div>
+      `;
+    };
+
+    const renderDissidentSearch = (state, objectNames, titlePrefix) => {
+      if (state.isConsistent || state.dissidentIndex === null) {
+        return `
+          <div class="result-block">
+            <div class="result-block__header">
+              <h3 class="result-block__title">Поиск диссидента</h3>
+            </div>
+            <div class="result-block__content">
+              <div class="note">Поиск диссидента не требуется: согласованность уже подтверждена либо дальнейшее сокращение комиссии невозможно. fileciteturn5file0</div>
+            </div>
+          </div>
+        `;
+      }
+
+      let rankingHeadHtml = "<tr><th>Показатель</th>";
+      objectNames.forEach((objectName) => {
+        rankingHeadHtml += `<th>${escapeHtml(objectName)}</th>`;
+      });
+      rankingHeadHtml += "</tr>";
+
+      const rankingBodyHtml = `
+        <tr>
+          <th>S<sub>j</sub></th>
+          ${state.columnSums.map((value) => `<td>${escapeHtml(formatNumber(value, 4))}</td>`).join("")}
+        </tr>
+        <tr>
+          <th>R(S<sub>j</sub>)</th>
+          ${state.rSj.map((value) => `<td>${escapeHtml(formatNumber(value, 4))}</td>`).join("")}
+        </tr>
+      `;
+
+      let deltaHeadHtml = "<tr><th>Эксперт / Объект</th>";
+      objectNames.forEach((objectName) => {
+        deltaHeadHtml += `<th>${escapeHtml(objectName)}</th>`;
+      });
+      deltaHeadHtml += "<th>ΣΔR<sub>i,j</sub></th></tr>";
+
+      let deltaBodyHtml = "";
+      state.expertRows.forEach((expertRow, expertIndex) => {
+        const isDissident = expertIndex === state.dissidentIndex;
+        const rowClass = isDissident ? ' class="cell--tie"' : "";
+
+        deltaBodyHtml += `<tr${rowClass}><th>${escapeHtml(expertRow.expertName)}</th>`;
+        state.deltaMatrix[expertIndex].forEach((deltaValue) => {
+          deltaBodyHtml += `<td>${escapeHtml(formatNumber(deltaValue, 4))}</td>`;
+        });
+        deltaBodyHtml += `<td>${escapeHtml(formatNumber(state.deltaSums[expertIndex], 4))}</td></tr>`;
+      });
+
+      return `
+        <div class="result-block">
+          <div class="result-block__header">
+            <h3 class="result-block__title">Поиск диссидента</h3>
+          </div>
+          <div class="result-block__content">
+            <div class="matrix-shell">
+              <div class="matrix-scroll">
+                <table class="matrix-table">
+                  <thead>${rankingHeadHtml}</thead>
+                  <tbody>${rankingBodyHtml}</tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="matrix-shell" style="margin-top:16px;">
+              <div class="matrix-scroll">
+                <table class="matrix-table">
+                  <thead>${deltaHeadHtml}</thead>
+                  <tbody>${deltaBodyHtml}</tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- <div class="note">
+              По формуле ΔR<sub>i,j</sub> = |R<sub>i,j</sub> − R(S<sub>j</sub>)| найден эксперт с максимальной суммой отклонений:
+              <strong>${escapeHtml(state.dissidentName)}</strong>. Именно его ранжировка исключается из следующего расчёта. fileciteturn5file0
+            </div> -->
+          </div>
+        </div>
+      `;
+    };
+
+    const renderTransformationProtocol = (expertRows, objectNames) => {
+      const listItems = [];
+
+      expertRows.forEach((expertRow) => {
+        if (!expertRow.transformed && expertRow.tieGroups.length === 0) {
+          return;
+        }
+
+        if (expertRow.tieGroups.length > 0) {
+          expertRow.tieGroups.forEach((tieGroup) => {
+            const objectLabels = tieGroup.objectIndexes.map((objectIndex) => objectNames[objectIndex]).join(", ");
+            listItems.push(`
+              <li>
+                <strong>${escapeHtml(expertRow.expertName)}</strong>: связные значения у объектов ${escapeHtml(objectLabels)}
+                переведены в средний ранг <strong>${escapeHtml(formatNumber(tieGroup.averageRank, 4))}</strong>.
+              </li>
+            `);
+          });
+        } else if (expertRow.transformed) {
+          listItems.push(`
+            <li>
+              <strong>${escapeHtml(expertRow.expertName)}</strong>: введены произвольные значения, выполнено преобразование в ранги по возрастанию.
+            </li>
+          `);
+        }
+      });
+
+      if (listItems.length === 0) {
+        return `
+          <div class="result-block">
+            <div class="result-block__header">
+              <h3 class="result-block__title">Протокол преобразования строк</h3>
+            </div>
+            <div class="result-block__content">
+              <div class="results-empty">Все строки уже являлись строгими рангами без связок.</div>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="result-block">
+          <div class="result-block__header">
+            <h3 class="result-block__title">Протокол преобразования строк</h3>
+          </div>
+          <div class="result-block__content">
+            <ul class="plain-list">${listItems.join("")}</ul>
+          </div>
+        </div>
+      `;
+    };
+
+    const renderObjectRating = (ratingRows) => {
+      return `
+        <div class="result-block">
+          <div class="result-block__header">
+            <h3 class="result-block__title">Упорядочение объектов</h3>
+          </div>
+          <div class="result-block__content">
+            <ul class="rating-list">
+              ${ratingRows.map((ratingRow, index) => `
+                <li class="rating-item">
+                  <div class="rating-item__index">${index + 1}</div>
+                  <div class="rating-item__name">${escapeHtml(ratingRow.objectName)}</div>
+                  <div class="rating-item__meta">S<sub>j</sub> = ${escapeHtml(formatNumber(ratingRow.sumValue, 4))}</div>
+                  <div class="rating-item__meta">R(S<sub>j</sub>) = ${escapeHtml(formatNumber(ratingRow.rankValue, 4))}</div>
+                </li>
+              `).join("")}
+            </ul>
+          </div>
+        </div>
+      `;
+    };
+
+    const buildVerdictBlock = (verdict) => {
+      return `
+        <div class="verdict">
+          <div class="verdict__label">${escapeHtml(verdict.label)}</div>
+          <h3 class="verdict__title">${escapeHtml(verdict.title)}</h3>
+          <p class="verdict__text">${escapeHtml(verdict.text)}</p>
+        </div>
+      `;
+    };
+
+    const renderResults = ({ rawMatrix, expertNames, objectNames, expertRows, states, alphaValue }) => {
+      const initialState = states[0];
+      const finalState = states[states.length - 1];
+      const finalVerdict = getFinalVerdict(finalState, states.length);
+      const objectRating = getObjectOrder(finalState, objectNames);
+
+      const footerRowsForState = (state) => ([
+        {
+          title: "Сумма рангов S_j",
+          values: state.columnSums.map((value) => formatNumber(value, 4)),
+          lastValue: formatNumber(state.totalTieCoefficient, 4)
+        },
+        {
+          title: `Отклонение от средней суммы (S_j - Sср), где Sср = ${formatNumber(state.averageSum, 4)}`,
+          values: state.deviations.map((value) => formatNumber(value, 4)),
+          lastValue: "—"
+        },
+        {
+          title: "Квадраты отклонений (S_j - Sср)^2",
+          values: state.squaredDeviations.map((value) => formatNumber(value, 4)),
+          lastValue: formatNumber(state.squaredDeviationSum, 4)
+        }
+      ]);
+
+      const originalMatrixHtml = renderMatrixTable({
+        title: "Таблица с исходными данными",
+        objectNames,
+        rowObjects: expertRows,
+        rowHeaderLabel: "Эксперт / Объект",
+        valueGetter: (rowObject, objectIndex) => rowObject.rawValues[objectIndex],
+        processedTable: false,
+        showTi: false,
+        showRowMode: true,
+        // noteHtml: '<div class="note">Строки с фиолетовой подсветкой содержат связные ранги, строки с мягкой сиреневой подсветкой были преобразованы из произвольных значений в ранги.</div>'
+      });
+
+      const processedMatrixHtml = renderMatrixTable({
+        title: "Матрица с обработанными рангами по полной комиссии",
+        objectNames,
+        rowObjects: initialState.expertRows,
+        rowHeaderLabel: "Эксперт / Объект",
+        valueGetter: (rowObject, objectIndex) => rowObject.normalizedRanks[objectIndex],
+        footerRows: footerRowsForState(initialState),
+        showTi: true,
+        processedTable: true,
+        showRowMode: true,
+        // noteHtml: '<div class="note">Эта таблица соответствует шагам первичной обработки, расчёта T<sub>i</sub>, S<sub>j</sub>, Sср и Σ(S<sub>j</sub> − Sср)^2 перед первым исключением диссидента. fileciteturn5file0</div>'
+      });
+
+      let iterationsHtml = "";
+
+      if (states.length > 1) {
+        for (let stateIndex = 1; stateIndex < states.length; stateIndex += 1) {
+          const currentState = states[stateIndex];
+          const iterationHtml = renderMatrixTable({
+            title: `Итерация ${stateIndex}`,
+            objectNames,
+            rowObjects: currentState.expertRows,
+            rowHeaderLabel: "Эксперт / Объект",
+            valueGetter: (rowObject, objectIndex) => rowObject.normalizedRanks[objectIndex],
+            footerRows: footerRowsForState(currentState),
+            showTi: true,
+            processedTable: true,
+            showRowMode: true,
+            // noteHtml: `
+            //   ${currentState.removedBeforeThisState ? `<div class="note">Перед этой итерацией исключён эксперт-диссидент: <strong>${escapeHtml(currentState.removedBeforeThisState)}</strong>.</div>` : ""}
+            //   <div class="note">${currentState.isConsistent ? "На этой итерации согласованность подтверждена." : "На этой итерации согласованность не подтверждена."}</div>
+            //   ${currentState.isConsistent || currentState.dissidentName === null ? "" : `<div class="note">По итогам этой итерации на следующем шаге исключается эксперт: <strong>${escapeHtml(currentState.dissidentName)}</strong>.</div>`}
+            // `
+          });
+
+          const searchHtml = renderDissidentSearch(currentState, objectNames, `Итерация ${stateIndex}`);
+          const cardsHtml = `
+            <div class="result-block">
+              <div class="result-block__header">
+                <h3 class="result-block__title">Итерация ${stateIndex} — показатели</h3>
+              </div>
+              <div class="result-block__content">
+                ${renderSummaryCards(currentState, alphaValue)}
+              </div>
+            </div>
+          `;
+
+          const iterationVerdict = currentState.isConsistent
+            ? {
+                code: "СОГЛАСОВАНО",
+                cssClass: "message-box message-box--success",
+                title: "Согласованность подтверждена",
+                label: `Итог итерации ${stateIndex}`,
+                text: "Проверка χ² выполнена успешно. Мнения комиссии согласованы, итоговое упорядочение объектов можно принимать в работу."
+              }
+            : {
+                code: "НЕ СОГЛАСОВАНО",
+                cssClass: "message-box message-box--warning",
+                title: "Согласованность не достигнута",
+                label: `Итог итерации ${stateIndex}`,
+                text: `После исключения эксперта «${currentState.removedBeforeThisState}» согласованность не достигнута.`
+              };
+          const iterationVerdictHtml = buildVerdictBlock(iterationVerdict);
+
+          iterationsHtml += iterationHtml + cardsHtml + iterationVerdictHtml + searchHtml;
+        }
+      } else {
+        iterationsHtml = `
+          <div class="result-block">
+            <div class="result-block__header">
+              <h3 class="result-block__title">Итерации после исключения диссидента</h3>
+            </div>
+            <div class="result-block__content">
+              <div class="results-empty">Дополнительные итерации не потребовались.</div>
+            </div>
+          </div>
+        `;
+      }
+
+      resultsContainer.innerHTML = `
+      <div class="${finalVerdict.cssClass}">${escapeHtml(finalVerdict.code)}</div>
+      ${processedMatrixHtml}
+      ${originalMatrixHtml}
+     
+        <div class="result-block">
+          <div class="result-block__header">
+            <h3 class="result-block__title">Показатели расчёта по полной комиссии</h3>
+          </div>
+          <div class="result-block__content">
+            ${renderSummaryCards(initialState, alphaValue)}
+          </div>
+        </div>
+        ${!initialState.isConsistent ? buildVerdictBlock({
+          code: "НЕ СОГЛАСОВАНО",
+          cssClass: "message-box message-box--warning",
+          title: "Необходим поиск диссидентов",
+          label: "Итог по полной комиссии",
+          text: "Согласованность мнений экспертов на полном составе комиссии не подтверждена. Требуется последовательное исключение экспертов-диссидентов."
+        }) : ""}
+        ${renderDissidentSearch(initialState, objectNames, "Полная комиссия")}
+        ${iterationsHtml}
+
+        <!-- ${renderTransformationProtocol(expertRows, objectNames)} -->
+        <!-- ${renderObjectRating(objectRating)} -->
+         ${buildVerdictBlock(finalVerdict)}
+      `;
+
+      latestExportPayload = {
+        rawMatrix,
+        expertNames,
+        objectNames,
+        expertRows,
+        states,
+        alphaValue,
+        finalVerdict,
+        objectRating
+      };
+      exportButton.disabled = false;
+    };
+
+    const matrixToSheetRows = ({ title, objectNames, rowObjects, valueGetter, showTi = false, footerRows = [] }) => {
+      const rows = [];
+      rows.push([title]);
+      rows.push([]);
+
+      const headerRow = ["Эксперт / Объект", ...objectNames];
+      if (showTi) {
+        headerRow.push("Ti");
+      }
+      rows.push(headerRow);
+
+      rowObjects.forEach((rowObject) => {
+        const currentRow = [rowObject.expertName];
+        objectNames.forEach((_, objectIndex) => {
+          currentRow.push(valueGetter(rowObject, objectIndex));
+        });
+        if (showTi) {
+          currentRow.push(rowObject.tieCoefficient);
+        }
+        rows.push(currentRow);
+      });
+
+      footerRows.forEach((footerRow) => {
+        const currentRow = [footerRow.title, ...footerRow.values];
+        if (showTi) {
+          currentRow.push(footerRow.lastValue ?? "");
+        }
+        rows.push(currentRow);
+      });
+
+      return rows;
+    };
+
+    const exportToExcel = () => {
+      if (!latestExportPayload) {
+        return;
+      }
+
+      const { rawMatrix, expertNames, objectNames, expertRows, states, alphaValue, finalVerdict, objectRating } = latestExportPayload;
+      const initialState = states[0];
+
+      const footerRowsForStateExport = (state) => ([
+        {
+          title: "Сумма рангов Sj",
+          values: state.columnSums,
+          lastValue: state.totalTieCoefficient
+        },
+        {
+          title: `Отклонение от средней суммы (Sj - Sср), где Sср = ${formatNumber(state.averageSum, 4)}`,
+          values: state.deviations,
+          lastValue: ""
+        },
+        {
+          title: "Квадраты отклонений (Sj - Sср)^2",
+          values: state.squaredDeviations,
+          lastValue: state.squaredDeviationSum
+        }
+      ]);
+
+      if (window.XLSX && XLSX.utils && XLSX.utils.book_new) {
+        const workbook = XLSX.utils.book_new();
+
+        const rawSheetRows = matrixToSheetRows({
+          title: "Исходные данные",
+          objectNames,
+          rowObjects: expertRows,
+          valueGetter: (rowObject, objectIndex) => rowObject.rawValues[objectIndex],
+          showTi: false
+        });
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rawSheetRows), "Исходные данные");
+
+        const processedSheetRows = matrixToSheetRows({
+          title: "Полная комиссия",
+          objectNames,
+          rowObjects: initialState.expertRows,
+          valueGetter: (rowObject, objectIndex) => rowObject.normalizedRanks[objectIndex],
+          showTi: true,
+          footerRows: footerRowsForStateExport(initialState)
+        });
+        processedSheetRows.push([]);
+        processedSheetRows.push(["W", initialState.wValue]);
+        processedSheetRows.push(["χ² расчётное", initialState.chiCalculated]);
+        processedSheetRows.push(["χ² табличное", initialState.chiCritical]);
+        processedSheetRows.push(["α", alphaValue]);
+        processedSheetRows.push(["Sср", initialState.averageSum]);
+        processedSheetRows.push(["Σ(Sj-Sср)^2", initialState.squaredDeviationSum]);
+        processedSheetRows.push(["Диссидент", initialState.dissidentName || "не требуется"]);
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(processedSheetRows), "Полная комиссия");
+
+        states.slice(1).forEach((state, index) => {
+          const iterationRows = matrixToSheetRows({
+            title: `Итерация ${index + 1}`,
+            objectNames,
+            rowObjects: state.expertRows,
+            valueGetter: (rowObject, objectIndex) => rowObject.normalizedRanks[objectIndex],
+            showTi: true,
+            footerRows: footerRowsForStateExport(state)
+          });
+          iterationRows.push([]);
+          iterationRows.push(["W", state.wValue]);
+          iterationRows.push(["χ² расчётное", state.chiCalculated]);
+          iterationRows.push(["χ² табличное", state.chiCritical]);
+          iterationRows.push(["α", alphaValue]);
+          iterationRows.push(["Sср", state.averageSum]);
+          iterationRows.push(["Σ(Sj-Sср)^2", state.squaredDeviationSum]);
+          iterationRows.push(["Исключён до итерации", state.removedBeforeThisState || "—"]);
+          iterationRows.push(["Следующий диссидент", state.dissidentName || "не требуется"]);
+          XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(iterationRows), `Итерация ${index + 1}`);
+        });
+
+        const finalRows = [["Итог"], []];
+        finalRows.push(["Вердикт", finalVerdict.code]);
+        finalRows.push(["Текст", finalVerdict.text]);
+        finalRows.push([]);
+        finalRows.push(["Место", "Объект", "Sj", "R(Sj)"]);
+        objectRating.forEach((ratingRow, index) => {
+          finalRows.push([index + 1, ratingRow.objectName, ratingRow.sumValue, ratingRow.rankValue]);
+        });
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(finalRows), "Итог");
+
+        XLSX.writeFile(workbook, "concordance-results.xlsx");
+        return;
+      }
+
+      alert("Библиотека Excel не загрузилась. Открой страницу с интернетом и повтори экспорт.");
+    };
+
+    const calculate = () => {
+      try {
+        const expertNames = getExpertNames();
+        const objectNames = getObjectNames();
+        const rawMatrix = readRawMatrix();
+        const processedExperts = processExpertRows(rawMatrix, expertNames);
+        const alphaValue = alphaSelect.value;
+        const states = buildAllStates(processedExperts, alphaValue);
+
+        if (states.length === 0) {
+          throw new Error("Не удалось выполнить расчёт.");
+        }
+
+        renderResults({
+          rawMatrix,
+          expertNames,
+          objectNames,
+          expertRows: processedExperts,
+          states,
+          alphaValue
+        });
+      } catch (error) {
+        latestExportPayload = null;
+        exportButton.disabled = true;
+        resultsContainer.innerHTML = `
+          <div class="message-box message-box--error">
+            ${escapeHtml(error.message || "Произошла ошибка при расчёте.")}
+          </div>
+        `;
+      }
+    };
+
+    const fillDemoData = () => {
+      expertCountInput.value = "5";
+      objectCountInput.value = "5";
+      alphaSelect.value = "0.05";
+      buildInterface();
+
+      const demoExpertNames = [
+        "Эксперт 1",
+        "Эксперт 2",
+        "Эксперт 3",
+        "Эксперт 4",
+        "Эксперт 5"
+      ];
+
+      const demoObjectNames = [
+        "Объект 1",
+        "Объект 2",
+        "Объект 3",
+        "Объект 4",
+        "Объект 5"
+      ];
+
+      document.querySelectorAll("[data-expert-name-index]").forEach((inputElement, expertIndex) => {
+        inputElement.value = demoExpertNames[expertIndex];
+      });
+
+      document.querySelectorAll("[data-object-name-index]").forEach((inputElement, objectIndex) => {
+        inputElement.value = demoObjectNames[objectIndex];
+      });
+
+      buildInputMatrix();
+
+      const demoMatrix = [
+        [1, 7, 4, 2, 6],
+        [4, 1, 1, 8, 9],
+        [3, 4, 1, 1, 2],
+        [6, 6, 4, 3, 1],
+      ];
+
+      demoMatrix.forEach((rowValues, expertIndex) => {
+        rowValues.forEach((cellValue, objectIndex) => {
+          const inputElement = document.querySelector(`[data-matrix-cell="${expertIndex}:${objectIndex}"]`);
+          if (inputElement) {
+            inputElement.value = String(cellValue);
+          }
+        });
+      });
+
+      resetResults();
+    };
+
+    buildFormButton.addEventListener("click", buildInterface);
+    fillDemoButton.addEventListener("click", fillDemoData);
+    clearButton.addEventListener("click", clearInputs);
+    calculateButton.addEventListener("click", calculate);
+    exportButton.addEventListener("click", exportToExcel);
+
+    buildInterface();
+  </script>
+</body>
+</html>
