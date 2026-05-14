@@ -463,6 +463,14 @@
       line-height: 1.06;
     }
 
+    .verdict__inequality {
+      margin: 0 0 10px;
+      font-size: 19px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.97);
+      letter-spacing: 0.01em;
+    }
+
     .verdict__text {
       margin: 0;
       max-width: 980px;
@@ -629,7 +637,7 @@
 <body>
   <div class="app">
     <section class="hero">
-      <h1 class="hero__title">Коэффициент конкордации со связными рангами</h1>
+      <h1 class="hero__title">Проверка согласованности комитета экспертов</h1>
       <!-- <p class="hero__text">
         Алгоритм построен по методике из файла: матрица «эксперт–объект», обработка связных рангов,
         расчёт поправочных коэффициентов <strong>T<sub>i</sub></strong>, сумм рангов <strong>S<sub>j</sub></strong>,
@@ -659,7 +667,7 @@
           </div>
 
           <div class="field-wrapper">
-            <label class="field-label" for="alphaSelect">Уровень значимости α</label>
+            <label class="field-label" for="alphaSelect">Уровень значимости</label>
             <select class="field-select" id="alphaSelect">
               <option value="0.1">0.10</option>
               <option value="0.05" selected>0.05</option>
@@ -684,16 +692,7 @@
           <div class="name-list" id="objectNameList"></div>
         </section>
 
-        <section class="card__section">
-          <button class="button button--primary button--full" id="calculateButton" type="button">Рассчитать</button>
-          <div class="button-row">
-            <button class="button button--secondary button--full" id="exportButton" type="button" disabled>Экспорт в Excel</button>
-          </div>
-          <!-- <p class="section-text section-text--last">
-            При обработке связных рангов система присваивает одинаковым значениям средние ранги и считает T<sub>i</sub> по формуле
-            <strong>T<sub>i</sub> = Σ n<sub>il</sub>(n<sub>il</sub><sup>2</sup> − 1)</strong>. fileciteturn5file0
-          </p> -->
-        </section>
+        
       </aside>
 
       <main class="workspace">
@@ -714,6 +713,14 @@
           </div>
         </section>
 
+        <section class="card__section">
+          <button class="button button--primary button--full" id="calculateButton" type="button">Рассчитать</button>
+          <!-- <p class="section-text section-text--last">
+            При обработке связных рангов система присваивает одинаковым значениям средние ранги и считает T<sub>i</sub> по формуле
+            <strong>T<sub>i</sub> = Σ n<sub>il</sub>(n<sub>il</sub><sup>2</sup> − 1)</strong>. fileciteturn5file0
+          </p> -->
+        </section>
+
         <section class="card results">
           <h2 class="results__title">Результаты расчёта</h2>
           <div id="resultsContainer">
@@ -721,6 +728,12 @@
               Здесь появятся исходная таблица, обработанная ранговая матрица, расчёт W, проверка согласованности,
               поиск диссидента, все итерации и экспорт в Excel.
             </div> -->
+          </div>
+        </section>
+
+        <section class="card__section">
+          <div class="button-row">
+            <button class="button button--secondary button--full" id="exportButton" type="button" disabled>Экспорт в Excel</button>
           </div>
         </section>
       </main>
@@ -814,25 +827,32 @@
       expertCountInput.value = expertCount;
       objectCountInput.value = objectCount;
 
+      const existingExpertNames = Array.from(document.querySelectorAll("[data-expert-name-index]"))
+        .map((el) => el.value.trim());
+      const existingObjectNames = Array.from(document.querySelectorAll("[data-object-name-index]"))
+        .map((el) => el.value.trim());
+
       expertNameList.innerHTML = "";
       objectNameList.innerHTML = "";
 
       for (let expertIndex = 0; expertIndex < expertCount; expertIndex += 1) {
+        const savedName = existingExpertNames[expertIndex] || `Эксперт ${expertIndex + 1}`;
         const rowElement = document.createElement("div");
         rowElement.className = "name-row";
         rowElement.innerHTML = `
           <div class="name-badge">${expertIndex + 1}</div>
-          <input class="field-input" type="text" data-expert-name-index="${expertIndex}" value="Эксперт ${expertIndex + 1}" />
+          <input class="field-input" type="text" data-expert-name-index="${expertIndex}" value="${escapeHtml(savedName)}" />
         `;
         expertNameList.appendChild(rowElement);
       }
 
       for (let objectIndex = 0; objectIndex < objectCount; objectIndex += 1) {
+        const savedName = existingObjectNames[objectIndex] || `Объект ${objectIndex + 1}`;
         const rowElement = document.createElement("div");
         rowElement.className = "name-row";
         rowElement.innerHTML = `
           <div class="name-badge">${objectIndex + 1}</div>
-          <input class="field-input" type="text" data-object-name-index="${objectIndex}" value="Объект ${objectIndex + 1}" />
+          <input class="field-input" type="text" data-object-name-index="${objectIndex}" value="${escapeHtml(savedName)}" />
         `;
         objectNameList.appendChild(rowElement);
       }
@@ -1133,9 +1153,10 @@
       let currentExperts = processedExperts.map((expertRow) => ({ ...expertRow }));
       let removedBeforeNextIteration = null;
       let iterationNumber = 0;
-      const safetyLimit = 100;
+      const initialExpertCount = processedExperts.length;
+      const maxIterations = initialExpertCount <= 5 ? 2 : initialExpertCount <= 10 ? 3 : 4;
 
-      while (currentExperts.length >= 2 && iterationNumber < safetyLimit) {
+      while (currentExperts.length >= 2 && iterationNumber < maxIterations) {
         const state = calculateState(currentExperts, alphaValue);
         state.iterationNumber = iterationNumber;
         state.removedBeforeThisState = removedBeforeNextIteration;
@@ -1299,44 +1320,35 @@
         <div class="summary-grid">
           <div class="summary-card">
             <div class="summary-card__title">Коэффициент W</div>
-            <div class="summary-card__value">${escapeHtml(formatNumber(state.wValue, 4))}</div>
+            <div class="summary-card__value">${escapeHtml(formatNumber(state.wValue, 2))}</div>
           </div>
           <div class="summary-card">
             <div class="summary-card__title">χ² расчётное</div>
-            <div class="summary-card__value">${escapeHtml(formatNumber(state.chiCalculated, 4))}</div>
+            <div class="summary-card__value">${escapeHtml(formatNumber(state.chiCalculated, 3))}</div>
           </div>
           <div class="summary-card">
             <div class="summary-card__title">χ² табличное</div>
-            <div class="summary-card__value">${state.chiCritical === null ? "нет данных" : escapeHtml(formatNumber(state.chiCritical, 4))}</div>
+            <div class="summary-card__value">${state.chiCritical === null ? "нет данных" : escapeHtml(formatNumber(state.chiCritical, 3))}</div>
           </div>
           <div class="summary-card">
-            <div class="summary-card__title">Уровень значимости α</div>
+            <div class="summary-card__title">Уровень значимости</div>
             <div class="summary-card__value">${escapeHtml(alphaValue)}</div>
           </div>
           <div class="summary-card">
-            <div class="summary-card__title">Средняя сумма Sср</div>
+            <div class="summary-card__title">Средняя сумма рангов</div>
             <div class="summary-card__value">${escapeHtml(formatNumber(state.averageSum, 4))}</div>
           </div>
           <div class="summary-card">
-            <div class="summary-card__title">Σ(Sj − Sср)²</div>
+            <div class="summary-card__title">Сумма квадратов отклонений</div>
             <div class="summary-card__value">${escapeHtml(formatNumber(state.squaredDeviationSum, 4))}</div>
           </div>
         </div>
       `;
     };
 
-    const renderDissidentSearch = (state, objectNames, titlePrefix) => {
+    const renderDissidentSearch = (state, objectNames, stepNumber) => {
       if (state.isConsistent || state.dissidentIndex === null) {
-        return `
-          <div class="result-block">
-            <div class="result-block__header">
-              <h3 class="result-block__title">Поиск диссидента</h3>
-            </div>
-            <div class="result-block__content">
-              <div class="note">Поиск диссидента не требуется: согласованность уже подтверждена либо дальнейшее сокращение комиссии невозможно. fileciteturn5file0</div>
-            </div>
-          </div>
-        `;
+        return "";
       }
 
       let rankingHeadHtml = "<tr><th>Показатель</th>";
@@ -1347,11 +1359,11 @@
 
       const rankingBodyHtml = `
         <tr>
-          <th>S<sub>j</sub></th>
+          <th>Сумма рангов</th>
           ${state.columnSums.map((value) => `<td>${escapeHtml(formatNumber(value, 4))}</td>`).join("")}
         </tr>
         <tr>
-          <th>R(S<sub>j</sub>)</th>
+          <th>Ранг (по сумме)</th>
           ${state.rSj.map((value) => `<td>${escapeHtml(formatNumber(value, 4))}</td>`).join("")}
         </tr>
       `;
@@ -1360,7 +1372,7 @@
       objectNames.forEach((objectName) => {
         deltaHeadHtml += `<th>${escapeHtml(objectName)}</th>`;
       });
-      deltaHeadHtml += "<th>ΣΔR<sub>i,j</sub></th></tr>";
+      deltaHeadHtml += "<th>Сумма отклонений</th></tr>";
 
       let deltaBodyHtml = "";
       state.expertRows.forEach((expertRow, expertIndex) => {
@@ -1377,7 +1389,7 @@
       return `
         <div class="result-block">
           <div class="result-block__header">
-            <h3 class="result-block__title">Поиск диссидента</h3>
+            <h3 class="result-block__title">Шаг ${stepNumber}</h3>
           </div>
           <div class="result-block__content">
             <div class="matrix-shell">
@@ -1481,11 +1493,71 @@
       `;
     };
 
+    const computeSpearmanMatrix = (expertRows) => {
+      const n = expertRows[0].normalizedRanks.length;
+      const pearsonCorr = (x, y) => {
+        const meanX = sumValues(x) / n;
+        const meanY = sumValues(y) / n;
+        let cov = 0, varX = 0, varY = 0;
+        for (let k = 0; k < n; k++) {
+          cov += (x[k] - meanX) * (y[k] - meanY);
+          varX += (x[k] - meanX) ** 2;
+          varY += (y[k] - meanY) ** 2;
+        }
+        const denom = Math.sqrt(varX * varY);
+        return denom === 0 ? 0 : cov / denom;
+      };
+      return expertRows.map((rowI) =>
+        expertRows.map((rowJ) => pearsonCorr(rowI.normalizedRanks, rowJ.normalizedRanks))
+      );
+    };
+
+    const renderCorrelationMatrix = (expertRows, expertNames) => {
+      const corrMatrix = computeSpearmanMatrix(expertRows);
+      let headHtml = "<tr><th>Эксперт</th>";
+      expertNames.forEach((name) => {
+        headHtml += `<th>${escapeHtml(name)}</th>`;
+      });
+      headHtml += "</tr>";
+      let bodyHtml = "";
+      expertRows.forEach((_, i) => {
+        bodyHtml += `<tr><th>${escapeHtml(expertNames[i])}</th>`;
+        corrMatrix[i].forEach((rValue) => {
+          bodyHtml += `<td>${escapeHtml(formatNumber(rValue, 3))}</td>`;
+        });
+        bodyHtml += "</tr>";
+      });
+      return `
+        <div class="result-block">
+          <div class="result-block__header">
+            <h3 class="result-block__title">Коэффициенты ранговой корреляции</h3>
+          </div>
+          <div class="result-block__content">
+            <div class="matrix-shell">
+              <div class="matrix-scroll">
+                <table class="matrix-table">
+                  <thead>${headHtml}</thead>
+                  <tbody>${bodyHtml}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    const buildInequalityStr = (state) => {
+      if (state.chiCritical === null) return "";
+      const sign = state.chiCalculated > state.chiCritical ? ">" : "<";
+      return `${formatNumber(state.chiCalculated, 3)} ${sign} ${formatNumber(state.chiCritical, 3)}`;
+    };
+
     const buildVerdictBlock = (verdict) => {
       return `
         <div class="verdict">
           <div class="verdict__label">${escapeHtml(verdict.label)}</div>
           <h3 class="verdict__title">${escapeHtml(verdict.title)}</h3>
+          ${verdict.inequality ? `<p class="verdict__inequality">${escapeHtml(verdict.inequality)}</p>` : ""}
           <p class="verdict__text">${escapeHtml(verdict.text)}</p>
         </div>
       `;
@@ -1499,33 +1571,23 @@
 
       const footerRowsForState = (state) => ([
         {
-          title: "Сумма рангов S_j",
+          title: "Сумма рангов",
           values: state.columnSums.map((value) => formatNumber(value, 4)),
           lastValue: formatNumber(state.totalTieCoefficient, 4)
         },
         {
-          title: `Отклонение от средней суммы (S_j - Sср), где Sср = ${formatNumber(state.averageSum, 4)}`,
+          title: `Отклонение от средней суммы`,
           values: state.deviations.map((value) => formatNumber(value, 4)),
           lastValue: "—"
         },
         {
-          title: "Квадраты отклонений (S_j - Sср)^2",
+          title: "Квадраты отклонений",
           values: state.squaredDeviations.map((value) => formatNumber(value, 4)),
-          lastValue: formatNumber(state.squaredDeviationSum, 4)
+          lastValue: ""
         }
       ]);
 
-      const originalMatrixHtml = renderMatrixTable({
-        title: "Таблица с исходными данными",
-        objectNames,
-        rowObjects: expertRows,
-        rowHeaderLabel: "Эксперт / Объект",
-        valueGetter: (rowObject, objectIndex) => rowObject.rawValues[objectIndex],
-        processedTable: false,
-        showTi: false,
-        showRowMode: true,
-        // noteHtml: '<div class="note">Строки с фиолетовой подсветкой содержат связные ранги, строки с мягкой сиреневой подсветкой были преобразованы из произвольных значений в ранги.</div>'
-      });
+      const correlationMatrixHtml = renderCorrelationMatrix(initialState.expertRows, expertNames);
 
       const processedMatrixHtml = renderMatrixTable({
         title: "Матрица с обработанными рангами по полной комиссии",
@@ -1546,7 +1608,7 @@
         for (let stateIndex = 1; stateIndex < states.length; stateIndex += 1) {
           const currentState = states[stateIndex];
           const iterationHtml = renderMatrixTable({
-            title: `Итерация ${stateIndex}`,
+            title: `Пересчет ${stateIndex}`,
             objectNames,
             rowObjects: currentState.expertRows,
             rowHeaderLabel: "Эксперт / Объект",
@@ -1562,11 +1624,11 @@
             // `
           });
 
-          const searchHtml = renderDissidentSearch(currentState, objectNames, `Итерация ${stateIndex}`);
+          const searchHtml = renderDissidentSearch(currentState, objectNames, stateIndex + 1);
           const cardsHtml = `
             <div class="result-block">
               <div class="result-block__header">
-                <h3 class="result-block__title">Итерация ${stateIndex} — показатели</h3>
+                <h3 class="result-block__title">Пересчет ${stateIndex} — показатели</h3>
               </div>
               <div class="result-block__content">
                 ${renderSummaryCards(currentState, alphaValue)}
@@ -1579,15 +1641,17 @@
                 code: "СОГЛАСОВАНО",
                 cssClass: "message-box message-box--success",
                 title: "Согласованность подтверждена",
-                label: `Итог итерации ${stateIndex}`,
-                text: "Проверка χ² выполнена успешно. Мнения комиссии согласованы, итоговое упорядочение объектов можно принимать в работу."
+                label: `Итог пересчет ${stateIndex}`,
+                inequality: buildInequalityStr(currentState),
+                text: "Мнение согласовано. Итоговое упорядочение объектов можно принимать в работу."
               }
             : {
                 code: "НЕ СОГЛАСОВАНО",
                 cssClass: "message-box message-box--warning",
                 title: "Согласованность не достигнута",
-                label: `Итог итерации ${stateIndex}`,
-                text: `После исключения эксперта «${currentState.removedBeforeThisState}» согласованность не достигнута.`
+                label: `Итог пересчет ${stateIndex}`,
+                inequality: buildInequalityStr(currentState),
+                text: `Мнение не согласовано. После исключения эксперта «${currentState.removedBeforeThisState}» согласованность не достигнута.`
               };
           const iterationVerdictHtml = buildVerdictBlock(iterationVerdict);
 
@@ -1607,9 +1671,8 @@
       }
 
       resultsContainer.innerHTML = `
-      <div class="${finalVerdict.cssClass}">${escapeHtml(finalVerdict.code)}</div>
       ${processedMatrixHtml}
-      ${originalMatrixHtml}
+      ${correlationMatrixHtml}
      
         <div class="result-block">
           <div class="result-block__header">
@@ -1624,14 +1687,15 @@
           cssClass: "message-box message-box--warning",
           title: "Необходим поиск диссидентов",
           label: "Итог по полной комиссии",
-          text: "Согласованность мнений экспертов на полном составе комиссии не подтверждена. Требуется последовательное исключение экспертов-диссидентов."
+          inequality: buildInequalityStr(initialState),
+          text: "Мнение не согласовано. Необходим поиск диссидентов."
         }) : ""}
-        ${renderDissidentSearch(initialState, objectNames, "Полная комиссия")}
+        ${renderDissidentSearch(initialState, objectNames, 1)}
         ${iterationsHtml}
 
         <!-- ${renderTransformationProtocol(expertRows, objectNames)} -->
         <!-- ${renderObjectRating(objectRating)} -->
-         ${buildVerdictBlock(finalVerdict)}
+         ${buildVerdictBlock({ ...finalVerdict, inequality: buildInequalityStr(finalState) })}
       `;
 
       latestExportPayload = {
@@ -1690,17 +1754,17 @@
 
       const footerRowsForStateExport = (state) => ([
         {
-          title: "Сумма рангов Sj",
+          title: "Сумма рангов",
           values: state.columnSums,
           lastValue: state.totalTieCoefficient
         },
         {
-          title: `Отклонение от средней суммы (Sj - Sср), где Sср = ${formatNumber(state.averageSum, 4)}`,
+          title: `Отклонение от средней суммы`,
           values: state.deviations,
           lastValue: ""
         },
         {
-          title: "Квадраты отклонений (Sj - Sср)^2",
+          title: "Квадраты отклонений",
           values: state.squaredDeviations,
           lastValue: state.squaredDeviationSum
         }
