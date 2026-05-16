@@ -638,22 +638,12 @@
   <div class="app">
     <section class="hero">
       <h1 class="hero__title">Проверка согласованности комитета экспертов</h1>
-      <!-- <p class="hero__text">
-        Алгоритм построен по методике из файла: матрица «эксперт–объект», обработка связных рангов,
-        расчёт поправочных коэффициентов <strong>T<sub>i</sub></strong>, сумм рангов <strong>S<sub>j</sub></strong>,
-        средней суммы <strong>Sср</strong>, коэффициента конкордации <strong>W</strong>, проверки по <strong>χ²</strong>
-        и последовательного исключения эксперта-диссидента по величине <strong>ΣΔR<sub>i,j</sub></strong>. fileciteturn5file0
-      </p> -->
     </section>
 
     <div class="layout">
       <aside class="card">
         <section class="card__section">
           <h2 class="section-title">1. Параметры</h2>
-          <!-- <p class="section-text">
-            Можно вводить как уже готовые ранги, так и произвольные значения. Система сама приведёт каждую строку
-            к рангам по порядку значений, а факт преобразования покажет в результатах. fileciteturn5file0
-          </p> -->
 
           <div class="field-grid">
             <div class="field-wrapper">
@@ -677,7 +667,6 @@
 
           <div class="button-row">
             <button class="button button--primary" id="buildFormButton" type="button">Построить форму</button>
-            <button class="button button--secondary" id="fillDemoButton" type="button">Заполнить демо</button>
             <button class="button button--secondary" id="clearButton" type="button">Очистить</button>
           </div>
         </section>
@@ -698,10 +687,6 @@
       <main class="workspace">
         <section class="card workspace-card">
           <h2 class="workspace-title">Матрица «эксперт — объект»</h2>
-          <!-- <p class="workspace-text">
-            По методике исходная таблица имеет размер p×m. Ниже вводятся оценки экспертов, после чего система строит
-            обработанную матрицу рангов и все расчётные таблицы. fileciteturn5file0
-          </p> -->
 
           <div class="matrix-shell">
             <div class="matrix-scroll" id="inputMatrixContainer"></div>
@@ -715,19 +700,11 @@
 
         <section class="card__section">
           <button class="button button--primary button--full" id="calculateButton" type="button">Рассчитать</button>
-          <!-- <p class="section-text section-text--last">
-            При обработке связных рангов система присваивает одинаковым значениям средние ранги и считает T<sub>i</sub> по формуле
-            <strong>T<sub>i</sub> = Σ n<sub>il</sub>(n<sub>il</sub><sup>2</sup> − 1)</strong>. fileciteturn5file0
-          </p> -->
         </section>
 
         <section class="card results">
           <h2 class="results__title">Результаты расчёта</h2>
           <div id="resultsContainer">
-            <!-- <div class="results-empty">
-              Здесь появятся исходная таблица, обработанная ранговая матрица, расчёт W, проверка согласованности,
-              поиск диссидента, все итерации и экспорт в Excel.
-            </div> -->
           </div>
         </section>
 
@@ -769,7 +746,6 @@
     const objectCountInput = document.getElementById("objectCountInput");
     const alphaSelect = document.getElementById("alphaSelect");
     const buildFormButton = document.getElementById("buildFormButton");
-    const fillDemoButton = document.getElementById("fillDemoButton");
     const clearButton = document.getElementById("clearButton");
     const calculateButton = document.getElementById("calculateButton");
     const exportButton = document.getElementById("exportButton");
@@ -912,12 +888,6 @@
     const resetResults = () => {
       latestExportPayload = null;
       exportButton.disabled = true;
-      // resultsContainer.innerHTML = `
-      //   <div class="results-empty">
-      //     Здесь появятся исходная таблица, обработанная ранговая матрица, расчёт W, проверка согласованности,
-      //     поиск диссидента, все итерации и экспорт в Excel.
-      //   </div>
-      // `;
       resultsContainer.innerHTML = `
        
       `;
@@ -1047,14 +1017,11 @@
         const strictRanks = isStrictRankRow(rowValues);
         const rankLike = isRankLikeRow(rowValues);
 
-        // let inputModeLabel = "Произвольные значения → ранги";
         let inputModeLabel = "";
 
         if (strictRanks) {
-          // inputModeLabel = "Готовые ранги";
           inputModeLabel = "";
         } else if (rankLike) {
-          // inputModeLabel = "Связные ранги → средние ранги";
           inputModeLabel = "";
         }
 
@@ -1418,81 +1385,7 @@
         </div>
       `;
     };
-
-    const renderTransformationProtocol = (expertRows, objectNames) => {
-      const listItems = [];
-
-      expertRows.forEach((expertRow) => {
-        if (!expertRow.transformed && expertRow.tieGroups.length === 0) {
-          return;
-        }
-
-        if (expertRow.tieGroups.length > 0) {
-          expertRow.tieGroups.forEach((tieGroup) => {
-            const objectLabels = tieGroup.objectIndexes.map((objectIndex) => objectNames[objectIndex]).join(", ");
-            listItems.push(`
-              <li>
-                <strong>${escapeHtml(expertRow.expertName)}</strong>: связные значения у объектов ${escapeHtml(objectLabels)}
-                переведены в средний ранг <strong>${escapeHtml(formatNumber(tieGroup.averageRank, 4))}</strong>.
-              </li>
-            `);
-          });
-        } else if (expertRow.transformed) {
-          listItems.push(`
-            <li>
-              <strong>${escapeHtml(expertRow.expertName)}</strong>: введены произвольные значения, выполнено преобразование в ранги по возрастанию.
-            </li>
-          `);
-        }
-      });
-
-      if (listItems.length === 0) {
-        return `
-          <div class="result-block">
-            <div class="result-block__header">
-              <h3 class="result-block__title">Протокол преобразования строк</h3>
-            </div>
-            <div class="result-block__content">
-              <div class="results-empty">Все строки уже являлись строгими рангами без связок.</div>
-            </div>
-          </div>
-        `;
-      }
-
-      return `
-        <div class="result-block">
-          <div class="result-block__header">
-            <h3 class="result-block__title">Протокол преобразования строк</h3>
-          </div>
-          <div class="result-block__content">
-            <ul class="plain-list">${listItems.join("")}</ul>
-          </div>
-        </div>
-      `;
-    };
-
-    const renderObjectRating = (ratingRows) => {
-      return `
-        <div class="result-block">
-          <div class="result-block__header">
-            <h3 class="result-block__title">Упорядочение объектов</h3>
-          </div>
-          <div class="result-block__content">
-            <ul class="rating-list">
-              ${ratingRows.map((ratingRow, index) => `
-                <li class="rating-item">
-                  <div class="rating-item__index">${index + 1}</div>
-                  <div class="rating-item__name">${escapeHtml(ratingRow.objectName)}</div>
-                  <div class="rating-item__meta">S<sub>j</sub> = ${escapeHtml(formatNumber(ratingRow.sumValue, 4))}</div>
-                  <div class="rating-item__meta">R(S<sub>j</sub>) = ${escapeHtml(formatNumber(ratingRow.rankValue, 4))}</div>
-                </li>
-              `).join("")}
-            </ul>
-          </div>
-        </div>
-      `;
-    };
-
+    
     const computeSpearmanMatrix = (expertRows) => {
       const n = expertRows[0].normalizedRanks.length;
       const pearsonCorr = (x, y) => {
@@ -1599,7 +1492,6 @@
         showTi: true,
         processedTable: true,
         showRowMode: true,
-        // noteHtml: '<div class="note">Эта таблица соответствует шагам первичной обработки, расчёта T<sub>i</sub>, S<sub>j</sub>, Sср и Σ(S<sub>j</sub> − Sср)^2 перед первым исключением диссидента. fileciteturn5file0</div>'
       });
 
       let iterationsHtml = "";
@@ -1617,11 +1509,6 @@
             showTi: true,
             processedTable: true,
             showRowMode: true,
-            // noteHtml: `
-            //   ${currentState.removedBeforeThisState ? `<div class="note">Перед этой итерацией исключён эксперт-диссидент: <strong>${escapeHtml(currentState.removedBeforeThisState)}</strong>.</div>` : ""}
-            //   <div class="note">${currentState.isConsistent ? "На этой итерации согласованность подтверждена." : "На этой итерации согласованность не подтверждена."}</div>
-            //   ${currentState.isConsistent || currentState.dissidentName === null ? "" : `<div class="note">По итогам этой итерации на следующем шаге исключается эксперт: <strong>${escapeHtml(currentState.dissidentName)}</strong>.</div>`}
-            // `
           });
 
           const searchHtml = renderDissidentSearch(currentState, objectNames, stateIndex + 1);
@@ -1693,8 +1580,6 @@
         ${renderDissidentSearch(initialState, objectNames, 1)}
         ${iterationsHtml}
 
-        <!-- ${renderTransformationProtocol(expertRows, objectNames)} -->
-        <!-- ${renderObjectRating(objectRating)} -->
          ${buildVerdictBlock({ ...finalVerdict, inequality: buildInequalityStr(finalState) })}
       `;
 
@@ -1870,59 +1755,8 @@
       }
     };
 
-    const fillDemoData = () => {
-      expertCountInput.value = "5";
-      objectCountInput.value = "5";
-      alphaSelect.value = "0.05";
-      buildInterface();
-
-      const demoExpertNames = [
-        "Эксперт 1",
-        "Эксперт 2",
-        "Эксперт 3",
-        "Эксперт 4",
-        "Эксперт 5"
-      ];
-
-      const demoObjectNames = [
-        "Объект 1",
-        "Объект 2",
-        "Объект 3",
-        "Объект 4",
-        "Объект 5"
-      ];
-
-      document.querySelectorAll("[data-expert-name-index]").forEach((inputElement, expertIndex) => {
-        inputElement.value = demoExpertNames[expertIndex];
-      });
-
-      document.querySelectorAll("[data-object-name-index]").forEach((inputElement, objectIndex) => {
-        inputElement.value = demoObjectNames[objectIndex];
-      });
-
-      buildInputMatrix();
-
-      const demoMatrix = [
-        [1, 7, 4, 2, 6],
-        [4, 1, 1, 8, 9],
-        [3, 4, 1, 1, 2],
-        [6, 6, 4, 3, 1],
-      ];
-
-      demoMatrix.forEach((rowValues, expertIndex) => {
-        rowValues.forEach((cellValue, objectIndex) => {
-          const inputElement = document.querySelector(`[data-matrix-cell="${expertIndex}:${objectIndex}"]`);
-          if (inputElement) {
-            inputElement.value = String(cellValue);
-          }
-        });
-      });
-
-      resetResults();
-    };
 
     buildFormButton.addEventListener("click", buildInterface);
-    fillDemoButton.addEventListener("click", fillDemoData);
     clearButton.addEventListener("click", clearInputs);
     calculateButton.addEventListener("click", calculate);
     exportButton.addEventListener("click", exportToExcel);
