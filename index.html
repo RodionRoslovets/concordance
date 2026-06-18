@@ -1756,6 +1756,79 @@
     };
 
 
+    const showMatrixPasteError = (message) => {
+      let errorEl = document.getElementById("matrixPasteError");
+      if (!errorEl) {
+        errorEl = document.createElement("div");
+        errorEl.id = "matrixPasteError";
+        errorEl.className = "message-box message-box--error";
+        errorEl.style.cssText = "margin-top:12px; display:none;";
+        inputMatrixContainer.closest(".matrix-shell").insertAdjacentElement("afterend", errorEl);
+      }
+      errorEl.textContent = message;
+      errorEl.style.display = "block";
+      clearTimeout(errorEl._hideTimeout);
+      errorEl._hideTimeout = setTimeout(() => { errorEl.style.display = "none"; }, 5000);
+    };
+
+    const handleMatrixPaste = (event) => {
+      const activeInput = document.activeElement;
+      if (!activeInput || !activeInput.classList.contains("matrix-input")) return;
+
+      const clipText = (event.clipboardData || window.clipboardData).getData("text/plain");
+      if (!clipText) return;
+
+      const rawRows = clipText.trimEnd().split(/\r?\n/);
+      const parsedRows = rawRows.map((row) => row.split("\t"));
+
+      const normalizeCell = (cellStr) =>
+        cellStr.trim().replace(/^"|"$/g, "").trim().replace(",", ".");
+
+      const invalidCells = [];
+      parsedRows.forEach((cols, r) => {
+        cols.forEach((cellStr, c) => {
+          const normalized = normalizeCell(cellStr);
+          if (normalized !== "" && !Number.isFinite(Number(normalized))) {
+            invalidCells.push(`[${r + 1},${c + 1}]: «${cellStr.trim()}»`);
+          }
+        });
+      });
+
+      if (invalidCells.length > 0) {
+        event.preventDefault();
+        const preview = invalidCells.slice(0, 3).join(", ");
+        const suffix = invalidCells.length > 3 ? ` и ещё ${invalidCells.length - 3}` : "";
+        showMatrixPasteError(`Некорректные данные: ${preview}${suffix}. Вставка отменена.`);
+        return;
+      }
+
+      const isSingleCell = parsedRows.length === 1 && parsedRows[0].length === 1;
+      if (isSingleCell) {
+        const normalized = normalizeCell(parsedRows[0][0]);
+        if (normalized === "") return;
+        event.preventDefault();
+        activeInput.value = normalized;
+        return;
+      }
+
+      event.preventDefault();
+
+      const [startRow, startCol] = activeInput.dataset.matrixCell.split(":").map(Number);
+
+      parsedRows.forEach((cols, rowOffset) => {
+        cols.forEach((cellStr, colOffset) => {
+          const targetInput = document.querySelector(
+            `[data-matrix-cell="${startRow + rowOffset}:${startCol + colOffset}"]`
+          );
+          if (!targetInput) return;
+          const normalized = normalizeCell(cellStr);
+          targetInput.value = normalized === "" ? "" : String(Number(normalized));
+        });
+      });
+    };
+
+    inputMatrixContainer.addEventListener("paste", handleMatrixPaste);
+
     buildFormButton.addEventListener("click", buildInterface);
     clearButton.addEventListener("click", clearInputs);
     calculateButton.addEventListener("click", calculate);
